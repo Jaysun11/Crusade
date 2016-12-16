@@ -1,112 +1,189 @@
-﻿using UnityEngine;
-using System.Collections;
+using UnityEngine;
 using UnityEngine.Networking;
+using System.Collections;
 
-
+[RequireComponent(typeof(PlayerSetup))]
 public class Player : NetworkBehaviour {
-	
+
 	[SyncVar]
 	private bool _isDead = false;
-	public bool isDead 
+	public bool isDead
 	{
-		get {return _isDead;}
-		protected set {_isDead = value;}
+		get { return _isDead; }
+		protected set { _isDead = value; }
 	}
 
-	[SerializeField]
-	private int maxHealth  = 100;
+    [SerializeField]
+    private int maxHealth = 100;
+
+    [SyncVar]
+    private int currentHealth;
+
+	public float GetHealthPct ()
+	{
+		return (float)currentHealth / maxHealth;
+	}
 
 	[SyncVar]
-	private int currentHealth;
+	public string username = "Loading...";
 
+	public int kills;
+	public int deaths;
 
 	[SerializeField]
 	private Behaviour[] disableOnDeath;
 	private bool[] wasEnabled;
 
+	[SerializeField]
+	private GameObject[] disableGameObjectsOnDeath;
 
-	public void Setup() {
-		wasEnabled = new bool[disableOnDeath.Length];
-		for (int i = 0; i < wasEnabled.Length; i++) {
-			wasEnabled [i] = disableOnDeath [i].enabled;
-		}
-	
-		SetDefaults ();
-	}
+	[SerializeField]
+	private GameObject deathEffect;
 
-	/* Kill Self
-	void Update() {
-		if (!isLocalPlayer) {
-			return;
+	[SerializeField]
+	private GameObject spawnEffect;
+
+	private bool firstSetup = true;
+
+	public void SetupPlayer ()
+    {
+		if (isLocalPlayer)
+		{
+			//Switch cameras
+			GameManager.instance.SetSceneCameraActive(false);
+			GetComponent<PlayerSetup>().playerUIInstance.SetActive(true);
 		}
-		if (Input.GetKey (KeyCode.K)) {
-			RpcTakeDamage (500);
-		}
-	}
-	*/
+
+		CmdBroadCastNewPlayerSetup();
+    }
+
+	[Command]
+	private void CmdBroadCastNewPlayerSetup ()
+	{
+		RpcSetupPlayerOnAllClients();
+    }
 
 	[ClientRpc]
-	public void RpcTakeDamage(int amount) {
+	private void RpcSetupPlayerOnAllClients ()
+	{
+		if (firstSetup)
+		{
+			wasEnabled = new bool[disableOnDeath.Length];
+			for (int i = 0; i < wasEnabled.Length; i++)
+			{
+				wasEnabled[i] = disableOnDeath[i].enabled;
+			}
 
-		if (isDead) {
-			return;
+			firstSetup = false;
 		}
 
-		currentHealth -= amount;
-		Debug.Log (transform.name + " now has " + currentHealth + " health.");
-
-		if (currentHealth <= 0) {
-			Die ();
-		}
+		SetDefaults();
 	}
+		
 
-	private void Die() {
+	[ClientRpc]
+    public void RpcTakeDamage (int _amount, string _sourceID)
+    {
+		if (isDead)
+			return;
+
+        currentHealth -= _amount;
+
+        Debug.Log(transform.name + " now has " + currentHealth + " health.");
+
+		if (currentHealth <= 0)
+		{
+			Die(_sourceID);
+		}
+    }
+
+	private void Die(string _sourceID)
+	{
 		isDead = true;
 
-		//Disable some components to disable movement and collisions etc.
-
-		for (int i = 0; i < disableOnDeath.Length; i++) {
-			disableOnDeath [i].enabled = false;
-		}
-		Collider col = GetComponent<Collider> ();
-		if (col != null) {
-			col.enabled = false;
+		Player sourcePlayer = GameManager.GetPlayer(_sourceID);
+		if (sourcePlayer != null)
+		{
+			sourcePlayer.kills++;
+			GameManager.instance.onPlayerKilledCallback.Invoke(username, sourcePlayer.username);
 		}
 
-		Debug.Log (transform.name + "is Dead");
+		deaths++;
 
-		//Respawn that player now
+		//Disable components
+		for (int i = 0; i < disableOnDeath.Length; i++)
+		{
+			disableOnDeath[i].enabled = false;
+		}
 
-		StartCoroutine (Respawn());
+		//Disable GameObjects
+		for (int i = 0; i < disableGameObjectsOnDeath.Length; i++)
+		{
+			disableGameObjectsOnDeath[i].SetActive(false);
+		}
 
+		//Disable the collider
+		Collider _col = GetComponent<Collider>();
+		if (_col != null)
+			_col.enabled = false;
 
+		//Spawn a death effect
+		GameObject _gfxIns = (GameObject)Instantiate(deathEffect, transform.position, Quaternion.identity);
+		Destroy(_gfxIns, 3f);
+
+		//Switch cameras
+		if (isLocalPlayer)
+		{
+			GameManager.instance.SetSceneCameraActive(true);
+			GetComponent<PlayerSetup>().playerUIInstance.SetActive(false);
+		}
+
+		Debug.Log(transform.name + " is DEAD!");
+
+		StartCoroutine(Respawn());
 	}
 
-	private IEnumerator Respawn() {
-		yield return new WaitForSeconds (GameManager.instance.matchSettings.respawnTime);
-		SetDefaults ();
-		Transform spawnPoint = NetworkManager.singleton.GetStartPosition ();
-		transform.position = spawnPoint.position;
-		transform.rotation = spawnPoint.rotation;
+	private IEnumerator Respawn ()
+	{
+		yield return new WaitForSeconds(GameManager.instance.matchSettings.respawnTime);
 
-		Debug.Log (transform.name + " Respawned");
+		Transform _spawnPoint = NetworkManager.singleton.GetStartPosition();
+		transform.position = _spawnPoint.position;
+		transform.rotation = _spawnPoint.rotation;
+
+		yield return new WaitForSeconds(0.1f);
+
+		SetupPlayer();
+
+		Debug.Log(transform.name + " respawned.");
 	}
 
-	public void SetDefaults() {
-
+    public void SetDefaults ()
+    {
 		isDead = false;
 
-		currentHealth = maxHealth;
+        currentHealth = maxHealth;
 
-		for (int i = 0; i < disableOnDeath.Length; i++) {
-			disableOnDeath [i].enabled = wasEnabled [i];
+		//Enable the components
+		for (int i = 0; i < disableOnDeath.Length; i++)
+		{
+			disableOnDeath[i].enabled = wasEnabled[i];
 		}
 
-		Collider col = GetComponent<Collider> ();
-		if (col != null) {
-			col.enabled = true;
+		//Enable the gameobjects
+		for (int i = 0; i < disableGameObjectsOnDeath.Length; i++)
+		{
+			disableGameObjectsOnDeath[i].SetActive(true);
 		}
 
+		//Enable the collider
+		Collider _col = GetComponent<Collider>();
+		if (_col != null)
+			_col.enabled = true;
+
+		//Create spawn effect
+		GameObject _gfxIns = (GameObject)Instantiate(spawnEffect, transform.position, Quaternion.identity);
+		Destroy(_gfxIns, 3f);
 	}
 
 }

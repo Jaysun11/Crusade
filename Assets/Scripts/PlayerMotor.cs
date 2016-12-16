@@ -1,85 +1,86 @@
-﻿using UnityEngine;
-using System.Collections;
+using UnityEngine;
 
-
-[RequireComponent (typeof (Rigidbody))]
+[RequireComponent(typeof(Rigidbody))]
 public class PlayerMotor : MonoBehaviour {
-
-	private Vector3 velocity = Vector3.zero;
-
-	private Vector3 rotation = Vector3.zero;
-
-
-	private float jumpForce = 0f;
-
-	private float camRotationX = 0f;
-	private float currentCameraRotationX = 0f;
-
-	[SerializeField]
-	private float cameraRotationLimit = 85f;
 
 	[SerializeField]
 	private Camera cam;
 
-	private Rigidbody rigid;
+	private Vector3 velocity = Vector3.zero;
+	private Vector3 rotation = Vector3.zero;
+	private float cameraRotationX = 0f;
+	private float currentCameraRotationX = 0f;
+	private Vector3 jumpForce = Vector3.zero;
 
-	void Start() {
+	[SerializeField]
+	private float cameraRotationLimit = 85f;
 
-		rigid = GetComponent<Rigidbody> ();
+	private Rigidbody rb;
 
+	void Start ()
+	{
+		rb = GetComponent<Rigidbody>();
 	}
 
-	public void FixedUpdate() {
-		//Process physics and perform movement
-		PerformMovement ();
-		PerformRotation ();
-
+	// Gets a movement vector
+	public void Move (Vector3 _velocity)
+	{
+		velocity = _velocity;
 	}
 
-	public void Move(Vector3 velocityFromController) {
-		//Takes the movement vector from the controller
-		velocity = velocityFromController;
-	}
-		
-	public void ApplyJump(float jumpForce) {
-		//Takes the movement vector from the controller
-		this.jumpForce = jumpForce;
+	// Gets a rotational vector
+	public void Rotate(Vector3 _rotation)
+	{
+		rotation = _rotation;
 	}
 
-	public void PerformMovement() {
+	// Gets a rotational vector for the camera
+	public void RotateCamera(float _cameraRotationX)
+	{
+		cameraRotationX = _cameraRotationX;
+	}
+	
+	// Get a force vector for our thrusters
+	public void ApplyJump (Vector3 _thrusterForce)
+	{
+		jumpForce = _thrusterForce;
+	}
 
-		if (velocity != Vector3.zero) {
-			rigid.MovePosition (rigid.position + velocity * Time.fixedDeltaTime);
+	// Run every physics iteration
+	void FixedUpdate ()
+	{
+		PerformMovement();
+		PerformRotation();
+	}
+
+	//Perform movement based on velocity variable
+	void PerformMovement ()
+	{
+		if (velocity != Vector3.zero)
+		{
+			rb.MovePosition(rb.position + velocity * Time.fixedDeltaTime);
 		}
 
-		if (this.jumpForce != 0f) {
-			rigid.AddForce (new Vector3 (0, 7, 0), ForceMode.Impulse);
-		}
-	}
-
-	public void Rotate(Vector3 rotationFromController) {
-		//Takes the movement vector from the controller
-		rotation = rotationFromController;
-	}
-
-	public void RotateCamera(float rotationFromCam) {
-		//Takes the cam vector from the controller
-		camRotationX = rotationFromCam;
-	}
-
-
-	public void PerformRotation() {
-
-		rigid.MoveRotation (rigid.rotation * Quaternion.Euler (rotation));
-
-		if (cam != null) {
-			currentCameraRotationX -= camRotationX;
-			currentCameraRotationX = Mathf.Clamp (currentCameraRotationX, -cameraRotationLimit, cameraRotationLimit);
-			cam.transform.localEulerAngles = new Vector3 (currentCameraRotationX, 0f, 0f);
+		if (jumpForce != Vector3.zero)
+		{
+			rb.AddForce(jumpForce * Time.fixedDeltaTime, ForceMode.Impulse);
 		}
 
 	}
 
+	//Perform rotation
+	void PerformRotation ()
+	{
+		rb.MoveRotation(rb.rotation * Quaternion.Euler (rotation));
+		if (cam != null)
+		{
+			// Set our rotation and clamp it
+			currentCameraRotationX -= cameraRotationX;
+			currentCameraRotationX = Mathf.Clamp(currentCameraRotationX, -cameraRotationLimit, cameraRotationLimit);
 
+			//Apply our rotation to the transform of our camera
+			cam.transform.localEulerAngles = new Vector3(currentCameraRotationX, 0f, 0f);
+		}
+	}
 
 }

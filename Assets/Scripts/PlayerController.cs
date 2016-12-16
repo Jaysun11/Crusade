@@ -1,89 +1,100 @@
-﻿using UnityEngine;
-using System.Collections;
+using UnityEngine;
 
-[RequireComponent (typeof (PlayerMotor))]
+[RequireComponent(typeof(PlayerMotor))]
 public class PlayerController : MonoBehaviour {
 
 	[SerializeField]
 	private float speed = 5f;
-
 	[SerializeField]
 	private float lookSensitivity = 3f;
 
-	[SerializeField]
-	private float jumpForce = 2;
 
+	[SerializeField]
+	private LayerMask environmentMask;
+
+	private bool jumping = false;
+	private float lastJump = 0;
+
+	// Component caching
 	private PlayerMotor motor;
 
-	private bool canJump = false;
 
-	void Start() {
 
-		motor = GetComponent<PlayerMotor> ();
+	void Start ()
+	{
+		motor = GetComponent<PlayerMotor>();
+		jumping = false;
 
 	}
 
+	void Update ()
+	{
+		if (PauseMenu.IsOn)
+		{
+			if (Cursor.lockState != CursorLockMode.None)
+				Cursor.lockState = CursorLockMode.None;
 
-	void Update() {
-		//Where movement is handled
+			motor.Move(Vector3.zero);
+			motor.Rotate(Vector3.zero);
+			motor.RotateCamera(0f);
 
-		float xMovement = Input.GetAxisRaw ("Horizontal");
-		float zMovement = Input.GetAxisRaw ("Vertical"); ;
+			return;
+		}
 
-		Vector3 moveHorizontal = transform.right * xMovement;
-		Vector3 moveVertical = transform.forward * zMovement;
+		if (Cursor.lockState != CursorLockMode.Locked)
+		{
+			Cursor.lockState = CursorLockMode.Locked;
+		}
 
-		Vector3 velocity = (moveHorizontal + moveVertical).normalized * speed; // SO we don't go diagonal faster
 
-		motor.Move (velocity);
 
-		//Calculate Rotation for turning around
+		//Calculate movement velocity as a 3D vector
+		float _xMov = Input.GetAxis("Horizontal");
+		float _zMov = Input.GetAxis("Vertical");
 
-		float yRotation = Input.GetAxisRaw ("Mouse X");
+		Vector3 _movHorizontal = transform.right * _xMov;
+		Vector3 _movVertical = transform.forward * _zMov;
 
-		Vector3 rotation = new Vector3 (0f, yRotation, 0f) * lookSensitivity;
+		// Final movement vector
+		Vector3 _velocity = (_movHorizontal + _movVertical) * speed;
 
-		//apply rotation
+		//Apply movement
+		motor.Move(_velocity);
 
-		motor.Rotate (rotation);
+		//Calculate rotation as a 3D vector (turning around)
+		float _yRot = Input.GetAxisRaw("Mouse X");
 
-		//Calculate Rotation for camera
+		Vector3 _rotation = new Vector3(0f, _yRot, 0f) * lookSensitivity;
 
-		float xRotation = Input.GetAxisRaw ("Mouse Y");
+		//Apply rotation
+		motor.Rotate(_rotation);
 
-		float camRotationX = xRotation * lookSensitivity;
+		//Calculate camera rotation as a 3D vector (turning around)
+		float _xRot = Input.GetAxisRaw("Mouse Y");
 
-		//apply rotation
+		float _cameraRotationX = _xRot * lookSensitivity;
 
-		motor.RotateCamera (camRotationX);
+		//Apply camera rotation
+		motor.RotateCamera(_cameraRotationX);
 
-		//Apply Jump Force
-	
+		checkJump (lastJump);
 
-		float _jumpForce = 0;
+		// Calculate the jumpForce based on player input
+		Vector3 jumpForce = Vector3.zero;
+		if (Input.GetButton ("Jump") && !jumping) {
+			jumpForce = Vector3.up * 1000;
+			jumping = true;
+			lastJump = Time.time;
+		}
 
-		if (Input.GetButton("Jump") && canJump) {
-			_jumpForce = this.jumpForce;
-			canJump = false;
-		} 
+		motor.ApplyJump (jumpForce);
 
-		motor.ApplyJump (_jumpForce);
-
-	
 	}
 
-
-	void OnCollisionEnter(Collision other) {
-
-		if (other.gameObject.CompareTag ("ground"))
-		{
-			canJump = true; // if the player is in the ground, the bool "canjump" become true
+	void checkJump(float lastJump) {
+		if (Time.time - lastJump >= 1.0f) {
+			jumping = false;
 		}
-		else
-		{
-			canJump = false; //if the player quit the ground, the bool become false
-		}
-			
 
 	}
 
